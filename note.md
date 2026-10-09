@@ -11,6 +11,7 @@ My personal C++ reference: what I learned, why things work, and the bugs I fixed
 6. [Arrays, vectors and lists](#6-arrays-vectors-and-lists)
 7. [Memory: new and delete](#7-memory-new-and-delete)
 8. [Classes](#8-classes)
+   - [8b. Inheritance and polymorphism](#8b-inheritance-and-polymorphism)
 9. [Exceptions](#9-exceptions)
 10. [Math functions](#10-math-functions)
 11. [Project structure: library, app, tests](#11-project-structure-library-app-tests)
@@ -291,8 +292,21 @@ Forgetting `delete` = **memory leak** (RAM stays used until the program ends).
 **Modern C++ avoids raw `new`/`delete`:**
 ```cpp
 std::vector<std::string> guests(numGuests);      // frees itself automatically
-auto p = std::make_unique<Shape>();              // smart pointer, frees itself
+auto p = std::make_unique<Circle>(2);            // smart pointer, frees itself
 ```
+
+### When to `delete`
+- Any time **after the last use**, but every `new` needs **exactly one** `delete`.
+- ❌ **Leak by reassigning:**
+  ```cpp
+  Shape* s = new Square(2);
+  s = new Circle(1);     // the Square is lost: nothing points to it anymore
+  delete s;              // only deletes the Circle
+  ```
+  ✅ `delete s;` **before** `s = new ...`, or use separate pointers / a vector.
+- ❌ Using `s` after `delete s` → dangling pointer (see section 16).
+- `delete` inside a loop over a vector leaves the vector full of dangling pointers. Delete in a separate loop at the end, then `clear()`.
+- Simplest: don't use `new` when a normal object works (`Square sq(2);` cleans itself up).
 
 ---
 
@@ -347,6 +361,114 @@ class calculator {
     }
 };
 // ✅ fix: return std::pow(a, b);   and/or rename the method to power()
+```
+
+### Member hiding (compiler warning C4458)
+If a function's parameter or local variable has the **same name as a member**, the local one wins and **hides** the member:
+```cpp
+class Student {
+    double score;                          // member
+    char letterGrade(double score) { ... } // ⚠️ this 'score' hides the member
+};
+```
+It may work by accident, but it's confusing. Use different names, e.g. `radius` (parameter) and `r` (member).
+
+### Declaration vs. definition
+| | Looks like | Meaning |
+|---|---|---|
+| **Declaration** | `double area() const;` (ends with `;`) | "This function exists" (the menu) |
+| **Definition** | `double area() const { return ...; }` (has `{ }`) | "Here is its code" (the kitchen) |
+
+- Every function needs **exactly one** definition.
+- Two definitions → **compiler error** `C2084: function already has a body`
+- Declared but never defined (and called) → **linker error** `LNK2019: unresolved external symbol`
+
+In a `.cpp` file, `ClassName::` says which class the function belongs to:
+```cpp
+double Circle::area() const { return PI * r * r; }
+```
+
+### Constructors: initializer list + validation
+```cpp
+Circle::Circle(double radius) : r(radius) {        // ": r(radius)" sets the member before the body runs
+    if (r <= 0) throw std::invalid_argument("Circle: radius must be positive");
+}
+```
+A constructor **can't return** an error, so it **throws**. Then: **if an object exists, it's valid**. Printing an error instead of throwing still creates the broken object.
+
+`explicit` on a one-argument constructor stops accidental conversions (a plain `5` silently becoming a `Circle`).
+
+### Design rule: store what defines it, calculate the rest
+A circle stores its **radius**. Area and perimeter are **calculated** in functions, not stored as variables; stored copies could go out of sync with the dimensions.
+
+---
+
+## 8b. Inheritance and polymorphism
+
+### Inheritance: "is a"
+```cpp
+class Square : public Rectangle {                 // a Square IS A Rectangle
+  public:
+    Square(double side) : Rectangle(side, side) {}  // pass values to the parent's constructor
+    std::string name() const override { return "Square"; }
+};
+```
+Square **inherits** `area()` and `perimeter()` from Rectangle; there's no need to rewrite them.
+
+⚠️ Don't redeclare the parent's variables in the child (`double a;` in Square). That creates a **second, never-set** variable and gives garbage results.
+Private members of the parent are **not accessible** in the child.
+
+### Virtual functions: the base class as a contract
+```cpp
+class Shape {
+  public:
+    virtual double area() const = 0;       // pure virtual: no code here, every subclass MUST write it
+    virtual double perimeter() const = 0;
+    virtual std::string name() const = 0;
+    virtual ~Shape() {}                    // virtual destructor
+};
+```
+| Term | Meaning |
+|---|---|
+| `virtual` | Call the **real object's** version, even through a `Shape*` or `Shape&` |
+| `= 0` (pure virtual) | **Not** "the value is 0"! It means "no code here; subclasses must provide it" |
+| Abstract class | Has at least one `= 0` function. `Shape s;` is a compile error; only subclasses can be created |
+| `override` | In the subclass: "I'm filling in the parent's virtual function". Compiler error if the name or `const` doesn't match exactly, so it catches typos |
+| Virtual destructor | So `delete` through a `Shape*` destroys the **whole** object. **A class with virtual functions needs a virtual destructor.** |
+
+`Shape` holds **no data**, only the list of functions every shape promises. `override` replaces **functions**, not values.
+
+### Polymorphism: one loop, every shape
+```cpp
+std::vector<Shape*> shapes = { new Circle(2), new Rectangle(3, 4), new Square(5), new Triangle(3, 4, 5) };
+
+for (Shape* s : shapes)
+    std::cout << s->name() << ": area " << s->area() << "\n";   // right formula for each
+
+for (Shape* s : shapes) delete s;   // clean up at the END, after the last use
+shapes.clear();                     // don't leave dangling pointers in the vector
+```
+The loop never checks the type; no `if (circle) ... else if (square) ...`. A new shape class works **without changing the loop**.
+
+`p->area()` is a shortcut for `(*p).area()`: follow the pointer, then call the function.
+
+Polymorphism also works through a **reference**, with no `new`/`delete` needed:
+```cpp
+Square sq(2);
+const Shape& s = sq;
+s.area();      // calls Rectangle::area() → 4
+```
+
+### Destructor order
+Deleting a `Square` runs: `~Square` → `~Rectangle` → `~Shape` (child first, then parents). Without a virtual destructor, only `~Shape` would run.
+
+### Most vexing parse ⚠️
+```cpp
+Circle(-3);       // ✅ creates a temporary Circle (a number can't be a variable name)
+double r = -3;
+Circle(r);        // ❌ declares a VARIABLE named r of type Circle!
+Circle bad(r);    // ✅ give it a name
+Circle{r};        // ✅ or use braces
 ```
 
 ---
@@ -426,15 +548,26 @@ int r = std::rand() % 100 + 1;   // 1–100
 
 ```
 c++/
-├── inc/calculator.h          ← LIBRARY: logic only, no cin/cout
-├── main.cpp                  ← APP: menu + user input, uses the library
-├── test/calculator.test.cpp  ← TESTS: check the library automatically
+├── inc/                      ← LIBRARIES (headers): logic only, no cin/cout
+│   ├── calculator.h          ← header-only
+│   ├── student.h             ← header-only
+│   └── shape.h               ← declarations only; code is in stage3/shape.cpp
+├── stage1/main.cpp           ← APPS: one program per folder
+├── stage2/stage2.cpp
+├── stage3/main.cpp, shape.cpp
+├── test/*.test.cpp           ← TESTS: one test program per library
 └── build/                    ← compiled output (not in git)
 ```
-- Both `main.cpp` and the test `#include` the same library. Each has its own `main()` and builds into its own `.exe`.
-- **Header-only library**: all code is in the `.h`. Bigger libraries split into `.h` (declarations) + `.cpp` (definitions).
-- `#pragma once` at the top of every header prevents it from being included twice.
-- Use **`/`** in include paths (`#include "../inc/calculator.h"`). It works on every OS; `\` only works on Windows.
+- The app and the test `#include` the same library. Each has its own `main()` and builds into its own `.exe`.
+- **One program = one `main()`.** Two `.cpp` files with `main()` built together → `LNK2005: main already defined`. Keep one program per folder.
+- **Header-only library**: all code is in the `.h`, so including it is enough.
+- **Split library** (`shape.h` + `shape.cpp`): every program that uses it must **also compile `shape.cpp`**, or the linker fails.
+- `#pragma once` at the top of every **header** (never in a `.cpp`).
+- A header must `#include` everything it uses. Don't rely on the `.cpp` including `<iostream>` first.
+- `#include "..."` paths are **relative to the file that contains them**. After moving a file, fix its includes (`"inc/x.h"` → `"../inc/x.h"`).
+- Use **`/`** in include paths. It works on every OS; `\` only works on Windows.
+- C++ headers have **no `.h`**: `<string>`, `<cmath>`, `<cstdlib>`. `<string.h>` is the old **C** header (`strlen`…) and does **not** contain `std::string`.
+- **Namespaces** prevent name clashes when several stages are combined into one program: `stage1::ReadInt` and `stage2::ReadInt` are different functions.
 
 ---
 
@@ -472,7 +605,45 @@ return failed == 0 ? 0 : 1;    // exit code: 0 = all passed
 5. Error cases: `divide(5, 0)` **must** throw
 6. **Every bug I've fixed**, so it can never come back unnoticed
 
-**Make a test fail on purpose** (break the code, run the tests, undo) to prove the tests really check something.
+7. **Boundaries**: `90` is A but `89.9` is B; `Triangle(1, 2, 3)` (flat) must throw
+8. **Each condition separately**: for `if (a <= 0 || b <= 0)`, test **only a** wrong and **only b** wrong. Testing both wrong at once can't tell `||` from `&&`.
+9. Things that must **not** throw (valid inputs near the boundary)
+
+### Testing `void` functions
+A `void` function returns nothing, so check **what it changed**:
+| A function… | Test it by… |
+|---|---|
+| returns a value | checking the return value |
+| writes to **reference parameters** (`findMinMax`) | checking those variables after the call. Start them at a "wrong" value like `-1`, so a function that forgot to write them fails |
+| **modifies** a container (`curveScores`) | checking the container after the call |
+| returns a **pointer** (`findScore`) | checking `nullptr`, and `p == &v[1]` (the address of the real element) |
+| **throws** | `checkThrows` |
+| **prints** | give it a `std::ostream& out = std::cout` parameter; the test passes a `std::ostringstream` and checks `out.str()` |
+
+### Good test habits
+- **Fresh data for each test.** Tests that share a vector break each other.
+- **Unique test names**, so a failure says exactly what broke.
+- **Return the right exit code**: `return failed == 0 ? 0 : 1;`. `return 0;` always says "success".
+- `check` only prints **failures**, so always print a summary (`Passed: X, Failed: Y`).
+- **When a test fails, decide which is wrong: the code or the test.** (`letterGrade(-5)`: throw, or return 'F'? Choosing the correct behaviour is part of writing tests.)
+- One `check` = one value. `check("x", (a, 8, b, 4))` does **not** check two things; the **comma operator** keeps only the last value. Write a helper instead:
+  ```cpp
+  void checkShape(const std::string& label, const Shape& shape, double area, double perimeter) {
+      check(label + " area", shape.area(), area);
+      check(label + " perimeter", shape.perimeter(), perimeter);
+  }
+  ```
+- In tests, prefer plain objects + references over `new`. Nothing to `delete`, no leaks.
+
+### Mutation testing: are my tests any good?
+Two different questions:
+| Question | How to check |
+|---|---|
+| Is my **code** correct? | Run the tests on the real code. All pass → ✅ |
+| Are my **tests** good? | **Break the code on purpose**, one small change at a time (`\|\|` → `&&`, `<=` → `<`, delete a check). Tests fail → ✅ good. Tests still pass → 🔴 write a test that catches it. Then **undo the change**. |
+
+With correct code, good and weak tests look the same (all pass). Only a deliberate bug shows the difference.
+My shape tests: before adding separate-condition tests, `Rectangle` with `&&` and a deleted triangle check both passed **10/10**. Afterwards, they were caught (3 and 2 failures).
 
 ### Testing the whole program
 ```bash
@@ -519,6 +690,32 @@ g++ main.cpp -o main.exe
 ```
 
 Useful compiler flags: `/W4` (MSVC) or `-Wall -Wextra` (g++) turn on more warnings. Warnings found real bugs in my code.
+
+### Compiler errors vs. linker errors
+| Starts with | Who complains | Meaning | Usual cause |
+|---|---|---|---|
+| `C2xxx` / `C3xxx` | **Compiler** | My code has a mistake | Typo, duplicate definition, missing `#include` |
+| `LNKxxxx` | **Linker** | Something was declared but its code wasn't found, or was found twice | A `.cpp` file wasn't compiled in; a function never written; two `main()`s |
+
+Seeing `LNK2019: unresolved external symbol`? Ask: **which `.cpp` file did I forget to compile in?**
+
+### Building several files
+```bash
+cl /EHsc /W4 stage3\main.cpp stage3\shape.cpp /Fe:build\stage3.exe
+```
+My VS Code tasks (Ctrl+Shift+B shows the list):
+| Task | Use for |
+|---|---|
+| **build active file** | Single-file programs and header-only tests |
+| **build all .cpp in active file's folder** | Multi-file programs like `stage3/` → `build\stage3.exe` |
+| **build shape tests** | `test\shape.test.cpp` + `stage3\shape.cpp` |
+
+### Build ≠ run
+Building only **creates** the `.exe`; nothing is printed. Run it yourself in PowerShell:
+```bash
+.\build\stage3.exe
+```
+PowerShell needs `.\` ("this folder") to run a local program.
 
 ---
 
@@ -698,3 +895,15 @@ Smart pointers (`std::unique_ptr`) and containers like `vector` prevent most of 
 | 14 | Grades: old students appeared in the next round | `clear()` at the end of the loop, skipped by `continue` | `clear()` at the **start** of the loop | Setup at the start, not cleanup at the end |
 | 15 | Grades: extra prompt after input ended | `break` inside `for` only leaves the `for`, not the `while` | Check `eof` again after the inner loop | `break` exits only the innermost loop |
 | 16 | Grades: curved score could go negative | Negative bonus not handled | Clamp to 0 in `curveScores` | Functions should protect their own rules |
+| 17 | Grade tests: exit code 0 even with failures | `return 0;` at the end of the test | `return failed == 0 ? 0 : 1;` | Tools trust the exit code |
+| 18 | `Student`: 5 × warning C4458 | Members `name`/`score` hidden by parameters with the same name | Remove the unused members | Don't half-build a class |
+| 19 | Shapes: `Square(5)` area `0`, perimeter `2.78e-309` | Square declared its **own** `double a;`, never set | Delete it; inherit `area()`/`perimeter()` from Rectangle | Inherit, don't redeclare |
+| 20 | Shapes: `Circle(-3)` was still created | Constructor printed "wrong size" instead of throwing | `throw std::invalid_argument` | Constructors throw |
+| 21 | Shapes: `Triangle(1, 2, 10)` was created | `validTriangle()` existed but nothing called it | Check in the constructor, use `<=` | Validate where the object is born |
+| 22 | Shapes: `C2084 already has a body` | `name()` defined in the `.h` **and** the `.cpp` | Keep one definition | One function, one body |
+| 23 | Shapes: `C2509 not declared in 'Square'` | Defined `Square::Rectangle::area` for an inherited function | Delete it | Inherited functions need no definition |
+| 24 | Shapes: `LNK2019 unresolved external` | Constructors declared but never written; later `shape.cpp` not compiled in | Write them; build all `.cpp` files together | `LNK` = missing code, not a typo |
+| 25 | Shapes: Heron's formula wrong | `a+b+c/2.0` = `a + b + (c/2)` (precedence) | `double s = (a + b + c) / 2.0;` | `*` and `/` before `+`; use a variable |
+| 26 | Shapes: `'string' is not a member of 'std'` | `#include <string.h>` (C header) | `#include <string>` | C++ headers have no `.h` |
+| 27 | Moved files no longer compiled | `#include "inc/x.h"` is relative to the file | `"../inc/x.h"` | Fix includes after moving files |
+| 28 | Shape tests passed even with broken code | Throw tests used both sides invalid; no triangle throw tests | Test each condition separately | Mutation testing proves tests work |

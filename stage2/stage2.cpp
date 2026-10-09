@@ -1,6 +1,6 @@
 #include <iostream>
 #include <sstream>
-#include "inc/student.h"
+#include "../inc/student.h"
 #include <stdexcept>
 /**Requirements
 - [x] Ask how many students, then read each name and score (0–100)
