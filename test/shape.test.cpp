@@ -35,8 +35,5 @@ int main(){
     checkThrows("rect negative height", [&]{ Rectangle(3, -4); });   // ← catches the && bug
     checkThrows("rect zero width",      [&]{ Rectangle(0, 5); });    // boundary: 0
     
-    
-    std::cout << "Passed: " << passed << ", Failed: " << failed << "\n";
     return report();
-    return failed == 0 ? 0 : 1;
 }

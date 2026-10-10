@@ -1,5 +1,5 @@
 #include "test.helper.h"
-#include "calculator.h"
+#include "../inc/calculator.h"
 
 
 int main() {
@@ -36,7 +36,5 @@ int main() {
     check("remainder INT_MIN",  calc.remainder(-2147483648.0, -1), 0);  // used to crash!
     checkThrows("remainder by zero", [&] { calc.remainder(5, 0); });
 
-    std::cout << "\n" << passed << " passed, " << failed << " failed\n";
-    return failed == 0 ? 0 : 1;   // exit code 1 means "tests failed"
     return report();
 }

@@ -55,7 +55,5 @@ int main(){
     checkThrows("Invalid negative score", [&] { student.letterGrade(-5); });
     checkThrows("Invalid score over 100", [&] { student.letterGrade(105); });
 
-    std::cout << "Passed: " << passed << ", Failed: " << failed << "\n";
     return report();
-    return failed == 0 ? 0 : 1;
 }
