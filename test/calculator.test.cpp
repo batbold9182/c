@@ -1,33 +1,6 @@
-#include <iostream>
-#include <cmath>
-#include <stdexcept>
-#include <string>
-#include "../inc/calculator.h"
+#include "test.helper.h"
+#include "calculator.h"
 
-int passed = 0;
-int failed = 0;
-
-void check(const std::string& name, double actual, double expected) {
-    if (std::fabs(actual - expected) < 1e-9) {
-        passed++;
-    } else {
-        failed++;
-        std::cout << "FAIL: " << name << "  expected " << expected
-                  << " but got " << actual << "\n";
-    }
-}
-
-// Check that something throws invalid_argument
-template <typename Func>
-void checkThrows(const std::string& name, Func f) {
-    try {
-        f();
-        failed++;
-        std::cout << "FAIL: " << name << "  expected an exception, none thrown\n";
-    } catch (const std::invalid_argument&) {
-        passed++;
-    }
-}
 
 int main() {
     calculator calc;
@@ -65,4 +38,5 @@ int main() {
 
     std::cout << "\n" << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;   // exit code 1 means "tests failed"
+    return report();
 }

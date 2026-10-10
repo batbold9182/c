@@ -1,33 +1,9 @@
 #include "../inc/student.h"
-#include <iostream>
+#include "test.helper.h"
 #include <sstream>
-#include <stdexcept>
 #include <vector>
-#include <cmath>
-
-int passed = 0;
-int failed = 0;
 
 
-void check(const std::string& name, double actual, double expected) {
-    if (std::fabs(actual - expected) < 1e-9) {
-        passed++;
-    } else {
-        failed++;
-        std::cout << "FAIL: " << name << "  expected " << expected
-                  << " but got " << actual << "\n";
-    }
-}
-template <typename Func>
-void checkThrows(const std::string& name, Func f) {
-    try {
-        f();
-        failed++;
-        std::cout << "FAIL: " << name << "  expected an exception, none thrown\n";
-    } catch (const std::invalid_argument&) {
-        passed++;
-    }
-}
 int main(){
     Student student;
 
@@ -80,5 +56,6 @@ int main(){
     checkThrows("Invalid score over 100", [&] { student.letterGrade(105); });
 
     std::cout << "Passed: " << passed << ", Failed: " << failed << "\n";
+    return report();
     return failed == 0 ? 0 : 1;
 }

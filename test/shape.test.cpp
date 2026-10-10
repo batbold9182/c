@@ -1,34 +1,5 @@
-#include <iostream>
-#include <stdexcept>
-#include <string>
+#include "test.helper.h"
 #include "../inc/shape.h"
-#include <cmath>
-
-int passed = 0;
-int failed = 0;
-
-void check(const std::string& name, double actual, double expected) {
-    if (std::fabs(actual - expected) < 1e-9) {
-        passed++;
-    } else {
-        failed++;
-        std::cout << "FAIL: " << name << "  expected " << expected
-                  << " but got " << actual << "\n";
-    }
-}
-
-// Check that something throws invalid_argument
-template <typename Func>
-void checkThrows(const std::string& name, Func f) {
-    try {
-        f();
-        failed++;
-        std::cout << "FAIL: " << name << "  expected an exception, none thrown\n";
-    } catch (const std::invalid_argument&) {
-        passed++;
-    }
-}
-
 
 const double PI = 3.14159265358979;
 
@@ -66,5 +37,6 @@ int main(){
     
     
     std::cout << "Passed: " << passed << ", Failed: " << failed << "\n";
+    return report();
     return failed == 0 ? 0 : 1;
 }
