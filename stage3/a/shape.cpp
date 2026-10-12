@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../inc/shape.h"
+#include "../../inc/shape.h"
 #include <cmath>
 #include <stdexcept>
 
@@ -8,7 +8,7 @@ const double PI = 3.14159265358979;
 Circle::Circle(double radius) : r(radius) {
     if (r <= 0) throw std::invalid_argument("Circle: radius must be positive");
 }
-double Circle::area() const      { return PI * r * r; }
+double Circle::area() const { return PI * r * r; }
 double Circle::perimeter() const { return 2 * PI * r; }
 
 

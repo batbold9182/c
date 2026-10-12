@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../inc/shape.h"
+#include "../../inc/shape.h"
 #include <vector>
 int main(){  
     std::vector<Shape*> shapes;
