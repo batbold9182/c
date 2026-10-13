@@ -69,7 +69,6 @@ int main(){
         accounts.push_back(new StudentAccount("canna", -100));
     } catch(const std::invalid_argument& e){
         std::cout<<":REFUSED " << e.what()<< "\n";
-    }
 
     for (Account* a : accounts) delete a;
     accounts.clear();
