@@ -12,6 +12,8 @@ My personal C++ reference: what I learned, why things work, and the bugs I fixed
 7. [Memory: new and delete](#7-memory-new-and-delete)
 8. [Classes](#8-classes)
    - [8b. Inheritance and polymorphism](#8b-inheritance-and-polymorphism)
+   - [8c. Inheritance in practice (bank accounts)](#8c-inheritance-in-practice-stage-3b-bank-accounts)
+   - [8d. Designing classes from scratch](#8d-designing-classes-from-scratch-stages-3c--3d)
 9. [Exceptions](#9-exceptions)
 10. [Math functions](#10-math-functions)
 11. [Project structure: library, app, tests](#11-project-structure-library-app-tests)
@@ -473,6 +475,196 @@ Circle{r};        // ✅ or use braces
 
 ---
 
+## 8c. Inheritance in practice (Stage 3b: bank accounts)
+
+### What `virtual` really does (in one sentence)
+**When a function is called through a base pointer or reference, `virtual` makes C++ look through it to the real object and run that object's version.**
+```cpp
+Dog d;
+Animal& a = d;      // label: Animal, real object: Dog
+a.sound();          // without virtual → Animal::sound() ("...")   — uses the LABEL
+                    // with virtual    → Dog::sound()    ("Woof")  — looks at the REAL OBJECT
+d.sound();          // always "Woof" — called directly, the type is already known
+```
+`virtual` is about **which function runs**. It never stores or replaces a value; both versions of the function exist side by side.
+
+### Three kinds of member functions
+| Kind | Example | Base class has code? | Subclasses… |
+|---|---|---|---|
+| Normal (non-virtual) | `void deposit(double)` | ✅ | use it as is; same for everyone |
+| `virtual` with a default | `virtual void withdraw(double)` | ✅ a sensible general rule | **may** reuse it or replace it |
+| Pure virtual `= 0` | `virtual std::string type() const = 0` | ❌ no sensible default | **must** write their own |
+
+### Which version runs? The nearest one
+When a subclass doesn't write a function, C++ uses the **nearest parent** that does:
+```
+StudentAccount → has withdraw? no
+CheckingAccount → has withdraw? YES → this runs (with Student's overdraftLimit = 0)
+Account        → not reached
+```
+Same as `Square` using `Rectangle::area()`.
+
+### Calling the parent's version: `Base::function()`
+```cpp
+void SavingsAccount::withdraw(double amount) {
+    if (counter >= 3) throw std::invalid_argument("max 3 per month");  // my own rule first
+    Account::withdraw(amount);   // then the parent's checks + subtraction
+    counter++;                   // only reached if nothing threw
+}
+```
+⚠️ Without `Account::`, `withdraw(amount)` calls **itself** → infinite recursion → stack overflow (like bug #2, `pow`).
+
+Reuse vs. replace:
+| | Savings | Checking |
+|---|---|---|
+| Parent's rule ("not more than you have") | still applies → **call** `Account::withdraw` | doesn't apply (overdraft allowed) → **don't call it**, check and subtract yourself |
+
+### `protected`
+| | Who can use it |
+|---|---|
+| `public` | everyone (`main` too) |
+| `protected` | the class **and its subclasses** |
+| `private` | only the class itself |
+
+Data the subclasses must change (`balance`) → `protected`. Functions the outside world uses (`deposit`, `withdraw`, getters) → `public`. No `setBalance()`: money only moves through functions that check the rules.
+
+⚠️ `class B : A` without a keyword is **private inheritance** → `A* p = &b;` fails (`C2243: conversion exists, but is inaccessible`). Always write `class B : public A`.
+
+### Data vs. functions
+- **Data** = what the object **remembers** (`owner`, `balance`, `overdraftLimit`). Never `virtual`.
+- **Functions** = what the object **does** (`withdraw`, `monthEnd`). `virtual` only if subclasses need their own version.
+- If a value is **different every call** (`amount`), it's a **function parameter**, not a member variable.
+
+### Constructor vs. function: where does the code go?
+| Ask | Put it in |
+|---|---|
+| Happens **once**, when the object is created? (store + validate data) | the **constructor** |
+| Happens **every time** something is done? (a withdrawal) | that **function** (`withdraw`) |
+| Happens **every month**? | `monthEnd()` |
+
+A constructor that tries to withdraw has no amount yet (bugs #31, #32).
+
+### Every member must get a value
+The initializer list sets **only what you list**. Anything missing holds **garbage** (undefined behavior, random results):
+```cpp
+CheckingAccount(const std::string& owner, double balance, double ODLimit)
+    : Account(owner, balance), overdraftLimit(ODLimit) { ... }   // forget overdraftLimit(ODLimit) → garbage
+```
+Warning `C4100: unreferenced formal parameter` = "you received a value and never stored it".
+
+### Check first, change last
+A function that may refuse must refuse **before** touching any data:
+```cpp
+void withdraw(double amount) override {
+    if (amount <= 0) throw ...;                          // check
+    if (balance - amount < -overdraftLimit) throw ...;   // check
+    balance -= amount;                                   // change — only if all checks passed
+}
+```
+Otherwise a "refused" operation still changes the data (`withdraw(-50)` added 50 — bug #30).
+
+### `void` functions can't be used as values
+```cpp
+a->monthEnd();                        // ✅ an action on its own line
+std::cout << a->monthEnd();           // ❌ nothing to print
+```
+**Do** the action first, then **ask** for the result: `a->monthEnd(); std::cout << a->getBalance();`
+
+### `main` reacts, objects enforce
+- The **objects** check their own rules and `throw` with a reason.
+- `main` **catches** and prints `e.what()`. It does **not** re-check the rules or throw itself.
+- `try/catch` **inside** the loop, so one refusal doesn't stop the other accounts.
+- One loop per **step** (withdraw all → month end all → print once), so order is right and output is readable.
+
+### Getting type-specific information
+| Need | Use |
+|---|---|
+| Every account shows its own extra info | a virtual function, e.g. `virtual std::string details() const` (best) |
+| Only some accounts, using common functions | `if (a->type() == "Savings")` (fragile: spelling!) |
+| A function only one subclass has | `dynamic_cast<SavingsAccount*>(a)` → `nullptr` if it's not one (use rarely) |
+| One specific account you created | keep its own pointer (delete it only once!) |
+
+---
+
+## 8d. Designing classes from scratch (Stages 3c + 3d)
+
+### The method: one row of the rules → one class
+| Column of the rules table | Becomes |
+|---|---|
+| Data it remembers | `private` member variables **and** constructor parameters |
+| Price / pay rule | the body of the virtual function (`dailyPrice()`, `pay()`) |
+| Type name | `type()` |
+
+Fill in a design table **before** coding: class, parent, members, constructor parameters, what each function returns.
+
+### What goes where?
+| Question | Answer |
+|---|---|
+| Same for **every object of the class**? (`type()`, Bike's 10, Intern's 500) | write it in the class's code |
+| Different **per object**? (plate, rate, tons, name) | **data**: member variable, set by the constructor |
+| Different **per call**? (`days`, `amount`, new hours) | **function parameter** |
+| Shared by **all** subclasses the same way? (`getPlate()`, `getName()`) | a **normal** function in the base class, written once |
+| The parent holds what **all** children share; the child adds what makes it special | `bonus` belongs in `Manager`, not in `SalariedEmployee` |
+
+"Is a" works in **one direction**: every Manager is a SalariedEmployee, not every SalariedEmployee is a Manager.
+
+### A non-virtual function that calls a virtual one
+```cpp
+double rentalCost(int days) const {          // NOT virtual: the same rule for every vehicle, written once
+    if (days < 1) throw std::invalid_argument("Days must be at least 1");
+    double cost = dailyPrice() * days;       // virtual: each vehicle's own price
+    if (days >= 7) cost *= 0.9;              // 10 % OFF = pay 90 % → × 0.9 (× 0.1 would mean "pay 10 %")
+    return cost;
+}
+```
+The base class writes the **shared rule**, the subclasses fill in only the **part that differs**.
+
+### How a virtual call really runs (no walking through the classes)
+`e.rentalCost(3)` on an `ElectricCar`:
+```
+rentalCost (in Vehicle) calls dailyPrice()
+  → virtual: the object knows its real type → jumps DIRECTLY to ElectricCar::dailyPrice()
+      → its code says Car::dailyPrice()  → only NOW Car's version runs → 40
+      → + 5 = 45
+  → 45 × 3 = 135
+```
+- It does **not** go Vehicle → Car → ElectricCar step by step. It goes **straight** to the real object's version.
+- A parent's version runs **only if the code explicitly asks** (`Car::dailyPrice()`).
+- `Vehicle → Car → ElectricCar` is the **family tree** (inheritance), not the order of a call.
+
+### `const` position
+```cpp
+const double rentalCost(int days)      // ❌ returns a "const double" (useless)
+double rentalCost(int days) const      // ✅ the function doesn't change the object
+```
+Through `const Vehicle*` / `const Vehicle&` only `const` functions can be called.
+
+### Every door into the object needs its own lock
+The constructor checks values at creation; a setter (`setHours`) checks every later change. Missing either = a way to break the object.
+A setter can reuse the rule: the constructor calls `setHours(h)`, so the rule lives in **one** place.
+
+### Assignment direction
+`=` copies **right → left**: `hour = h` means "hour **becomes** h". `h = hour` throws the new value away.
+
+### Totals in a loop
+| Where | What |
+|---|---|
+| **before** the loop | `double total = 0;` (inside the loop it would reset every pass) |
+| **inside** the loop (with `{ }`!) | `total += ...;` on its own line, not inside a `cout` chain (`<<` runs before `+=`) |
+| **after** the loop | print once |
+
+Without `{ }`, a `for` repeats only the **next single statement**, whatever the indentation says.
+
+### Creating objects in `main`
+```cpp
+Car c("CR-1", 40);                      // plain object: c.rentalCost(3), cleaned up automatically
+std::vector<Vehicle*> v;                // for polymorphic loops
+v.push_back(new Car("CR-1", 40));       // v[i]->rentalCost(3), needs delete at the end
+Vehicle x("AB-1");                      // ❌ C2259: abstract class
+```
+
+---
+
 ## 9. Exceptions
 
 ### How `throw` works
@@ -634,6 +826,33 @@ A `void` function returns nothing, so check **what it changed**:
   }
   ```
 - In tests, prefer plain objects + references over `new`. Nothing to `delete`, no leaks.
+- **A refusal must leave the object unchanged**: after `checkThrows`, also `check` the value. `checkThrows` alone can't see "changed, then threw".
+  ```cpp
+  checkThrows("negative amount", [&]{ c.withdraw(-50); });
+  check("refused withdrawal leaves balance", c.getBalance(), 1000);
+  ```
+- **Any call that might throw goes inside `checkThrows` / `checkNoThrow`**, also setup steps. A plain call that throws crashes the whole test program (exit code `-1073740791`, no `FAIL` line, later tests never run).
+- A test that **can never fail** tests nothing (student `monthEnd` when a student can never be negative).
+- A `check` on a call that might wrongly throw → put the check **inside** `checkNoThrow`, so a bug gives a FAIL line instead of a crash:
+  ```cpp
+  checkNoThrow("1 day allowed", [&]{ check("1 day costs 40", c.rentalCost(1), 40); });
+  ```
+- **Which function throws?** Constructor errors → create the object inside the lambda (`[&]{ Car{"CR-3", -40}; }`). Function errors → call it on an existing object (`[&]{ c.rentalCost(0); }`). `Car.dailyPrice{...}` is wrong: `Car` is the class, `.` needs an object.
+- Some decisions are intentional (e.g. not validating a value): write a **comment** and a `checkNoThrow` test, so it's documented and nobody "fixes" it by accident.
+- No test suite checks "everything possible". Aim for: every rule, every boundary, every error, every past bug — and measure with mutation testing.
+
+### Lambdas: `[&]{ ... }`
+A small unnamed function written in place. `checkThrows` needs it so it can run the code **inside its own `try`** (a plain call would run — and throw — before `checkThrows` even starts).
+| Capture | Meaning |
+|---|---|
+| `[&]` | use outside variables **by reference** (the real `bat`) |
+| `[=]` | use **copies** (read-only inside the lambda) |
+| `[]` | use no outside variables |
+
+### Shared test helpers: `test/test.helper.h`
+`check`, `checkStr`, `checkThrows`, `checkNoThrow`, `report()`. Every test ends with `return report();` (prints the summary **and** returns the exit code).
+- Variables/functions defined in a header need `inline` (`inline int passed = 0;`) — **inline variables need C++17**.
+- Test helpers live in `test/`, not `inc/` (`inc/` is for the libraries my apps use).
 
 ### Mutation testing: are my tests any good?
 Two different questions:
@@ -644,6 +863,10 @@ Two different questions:
 
 With correct code, good and weak tests look the same (all pass). Only a deliberate bug shows the difference.
 My shape tests: before adding separate-condition tests, `Rectangle` with `&&` and a deleted triangle check both passed **10/10**. Afterwards, they were caught (3 and 2 failures).
+My account tests: first version caught **0 of 4** mutants (17/17 passed). Final version: **33 tests, 8 of 8 mutants caught** (subtract-before-check, fee at exactly 0, student overdraft, deposit doing nothing, deposit(0) accepted, counter not reset, no interest).
+My employee tests: 1 test caught 0 of 4 → 19 tests caught 6 of 7. My vehicle tests: **40 tests, 7 of 7 caught**.
+
+**Equivalent mutant:** a change that doesn't alter behaviour, so **no** test can catch it. Example: overtime `hour <= 160` → `hour < 160`. At exactly 160 both give `rate × 160` (+ 0 overtime). Not a gap in the tests.
 
 ### Testing the whole program
 ```bash
@@ -716,6 +939,22 @@ Building only **creates** the `.exe`; nothing is printed. Run it yourself in Pow
 .\build\stage3.exe
 ```
 PowerShell needs `.\` ("this folder") to run a local program.
+
+| You see | Meaning |
+|---|---|
+| `error C2xxx` / `LNKxxxx`, no "Build finished successfully" | the **build** failed |
+| "Build finished successfully", then the program prints nothing / exits strangely | the **program** crashed (usually an uncaught exception) |
+
+In the Ctrl+Shift+B list, pick **my** tasks (marked "Task generated by Debugger" / my descriptions). The ones under *detected tasks* are VS Code's defaults without my flags.
+
+### Which C++ version am I using?
+- Compiler: run `cl` → `Version 19.40` = Visual Studio 2022 (17.10).
+- Standard: print `_MSVC_LANG` (`201402` = C++14, `201703` = C++17, `202002` = C++20). On MSVC `__cplusplus` says `199711` unless `/Zc:__cplusplus`. On g++ use `__cplusplus` / `g++ --version`.
+- **MSVC defaults to C++14.** My tasks use `/std:c++20` (g++: `-std=c++20`). Without it: `C7525: inline variables require at least '/std:c++17'`.
+
+### Header-only or not?
+Functions in the header end with `{ ... }` → header-only, including it is enough (calculator, student, account).
+They end with only `;` → the code is in a `.cpp` that must be compiled in (shape). Missing it → `LNK2019`.
 
 ---
 
@@ -907,3 +1146,38 @@ Smart pointers (`std::unique_ptr`) and containers like `vector` prevent most of 
 | 26 | Shapes: `'string' is not a member of 'std'` | `#include <string.h>` (C header) | `#include <string>` | C++ headers have no `.h` |
 | 27 | Moved files no longer compiled | `#include "inc/x.h"` is relative to the file | `"../inc/x.h"` | Fix includes after moving files |
 | 28 | Shape tests passed even with broken code | Throw tests used both sides invalid; no triangle throw tests | Test each condition separately | Mutation testing proves tests work |
+| 29 | Account: `owner`/`balance` written as virtual functions | Mixed up data and functions | `protected: std::string owner; double balance;` | Data stores, functions do; data is never virtual |
+| 30 | Checking: `withdraw(-50)` was refused but the balance changed | `balance -= amount;` **before** the checks | Check first, change last | A refusal must leave everything unchanged |
+| 31 | Savings: 4th withdrawal allowed | Withdrawal counting written in the **constructor** | Override `withdraw()`, count there | Constructor runs once; functions run every call |
+| 32 | Checking/Student: random results, student couldn't be created | `overdraftLimit` not in the initializer list + `amount` as an unset member, withdrawn in the constructor | `overdraftLimit(ODLimit)`; `amount` as `withdraw`'s parameter | Every member gets a value; per-call values are parameters |
+| 33 | Account: `C2665 cannot convert 'double' to 'double (*)(void)'` | Parameter written `double initialBalance()` | `double initialBalance` | `()` makes it a function |
+| 34 | Nothing could call `deposit()` (`C2248`) | Everything under `protected:`, no `public:` | Data `protected`, functions `public` | Each label applies until the next one |
+| 35 | `C2243 conversion ... inaccessible` | `class SavingsAccount : Account` (private by default) | `: public Account` | Always write `public` |
+| 36 | Savings `withdraw` did nothing, 4 × "OK" | Lines after `throw` inside the `if`'s braces (`C4702`) | Close the `if` right after `throw` | Lines that always run go outside the `if` |
+| 37 | `StudentAccount` declared its own `overdraftLimit` | Redeclared a parent's member (like bug #19) | Pass `0` to the parent's constructor instead | Children don't redeclare parents' data |
+| 38 | `void monthEnd() { return balance; }` (`C2562`) | Returning a value from `void` | Empty body `{}` | `void` = nothing to give back |
+| 39 | Stage 3b `main` crashed immediately | `main` threw on a non-savings account; `while(true)` with no exit | Objects throw, `main` catches; no infinite loop | `main` reacts, objects enforce |
+| 40 | `cout << accounts[i]` printed addresses | Printing a pointer | `a->type()`, `a->getOwner()`, `a->getBalance()` | A pointer's value is an address |
+| 41 | `cout << a->monthEnd()` didn't compile | Using a `void` call as a value | Call it, then print `getBalance()` | Do first, then ask |
+| 42 | Month-end table printed 3 times | `printAccounts` inside the loop over accounts | Loop for the action, print once after | Know which lines repeat |
+| 43 | "4 withdrawals" withdrew only once | Looped over accounts, not over 4 attempts | `for (int i = 1; i <= 4; i++)` with `try` inside | Loop over what should repeat |
+| 44 | `accounts.clear()` leaked memory | `clear()` without `delete` | `for (Account* a : accounts) delete a;` first | `clear()` only empties the list of pointers |
+| 45 | Tests: `C7525 inline variables require /std:c++17` | MSVC defaults to C++14 | `/std:c++20` in all tasks | Know your C++ standard |
+| 46 | Tests "build failing" (actually crashing) | `fee.withdraw(1150)` past the limit, outside `checkThrows` | Correct amount; wrap risky calls in `checkNoThrow` | Build ≠ run; uncaught exception = crash |
+| 47 | Test expected a fee on a positive balance | Test disagreed with the rule (fee only when negative) | Fix the test, add the 0 boundary | Decide the rule first, then the test |
+| 48 | Payroll: `bonus` and `hour` in `SalariedEmployee` | Mixed several types' data into one class | One class per row of the rules; bonus in `Manager` | The parent holds only what all children share |
+| 49 | Payroll: `C2665` creating an employee with `"Anna"` | `std::string&` (non-const) can't bind to a literal | `const std::string&` | Always `const&` for input strings |
+| 50 | `manager::pay()` crashed | `return pay() + bonus;` called itself | `SalariedEmployee::pay() + bonus` | Calling the parent needs `Parent::` (bug #2 again) |
+| 51 | Hourly pay was garbage (`-2.09e-310`) | Constructor didn't store `hour` / `hourlyRate` (`C4100`) | Store them in the initializer list | Read `unreferenced formal parameter` warnings |
+| 52 | `setHours` never changed the pay | `h = hour;` (wrong direction), first after `throw` | `hour = h;` after the check | `=` copies right → left |
+| 53 | Overtime paid for **short** weeks | `if (hour >= 160)` branches swapped | `if (hour <= 160)` normal pay | Read conditions out loud |
+| 54 | Employee tests "ran shape.test.exe" | Picked "build all .cpp in folder" in `test/` (several `main`s) and "build shape tests" | "build active file" for each test | Read the task name before Enter |
+| 55 | Vehicle plate always empty | Base constructor didn't store `Plate` | `: Plate(Plate)` | Receiving ≠ storing |
+| 56 | `getPlate`/`rentalCost` written 4–5 times | Made them virtual / copied into each subclass | One normal function in `Vehicle` | Same for all → write once in the base |
+| 57 | `const double rentalCost(...)` couldn't be called on `const Vehicle*` | `const` in front = const return value | `double rentalCost(int days) const` | `const` goes **after** the `( )` |
+| 58 | 3-day car rental cost 12 | `× 0.1` = "pay 10 %", branches swapped | `× 0.9` only when `days >= 7` | 10 % off = pay 90 % |
+| 59 | Exactly 7 days got no discount | `days > 7` | `days >= 7` | "7 or more" = `>=`; test 6 vs. 7 |
+| 60 | ElectricCar price 5 instead of 45 | Passed `Car`'s own unset `dailyRate` to `Car`'s constructor | Take a `rate` parameter, pass it up | Values come from the caller, not from unset members |
+| 61 | Truck price ignored tons | `return dailyRate;` | `dailyRate + 15 * tons` | Compare every function with the rules table |
+| 62 | `total` didn't add up / didn't compile | No `{ }` on the `for`, `total = 0` inside the loop, `+=` inside `cout` | Declare before, add inside (own line), print after | Braces + "before / inside / after" |
+| 63 | A test with a plain `check(..., c.rentalCost(1), ...)` crashed on a mutant | Call that might throw outside `checkNoThrow` | Put the check inside `checkNoThrow` | Wrap anything that might throw |

@@ -94,5 +94,5 @@ class StudentAccount :public CheckingAccount {
         }
         void monthEnd() override {
         }
-        std::string type() const override {return "student";}
+        std::string type() const override {return "Student";}
 };
