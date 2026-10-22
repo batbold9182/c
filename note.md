@@ -12,7 +12,7 @@ My personal C++ reference: what I learned, why it works, and the bugs I fixed.
 7. [Classes](#7-classes)
 8. [Inheritance and polymorphism](#8-inheritance-and-polymorphism)
 9. [Designing classes](#9-designing-classes)
-10.[DSA] (#10-map, set, algorithms, lambdas, file I/O, smart pointers)
+10. [STL: containers, algorithms, lambdas, files, smart pointers](#10-stl-containers-algorithms-lambdas-files-smart-pointers)
 11. [Exceptions](#11-exceptions)
 12. [Math](#12-math)
 13. [Project structure](#13-project-structure)
@@ -266,16 +266,99 @@ Also works with references (`const Shape& s = sq;`), no `new` needed. Through `c
 **Totals:** declare before the loop, `total += x;` inside (own line, `<<` binds before `+=`), print after.
 
 ---
-## 10. DSA
+
+## 10. STL: containers, algorithms, lambdas, files, smart pointers
+The **STL** = **containers** (store data) + **algorithms** (work on data) + **iterators** (connect them).
+
+### Containers
+| Container | What it is | Use when |
+|---|---|---|
+| `std::vector<T>` | dynamic array | the default list |
+| `std::map<K, V>` | key → value, **sorted by key**, unique keys | look up by id |
+| `std::unordered_map<K, V>` | same, **unsorted**, faster | fast lookup, order doesn't matter |
+| `std::set<T>` | sorted, **no duplicates** | "all authors, no duplicates" |
+| `std::list<T>` | linked list | rarely (many middle inserts) |
+
+All: `size()`, `empty()`, `clear()`, `begin()`, `end()`.
+- **vector:** `push_back(x)`, `pop_back()`, `v[i]`, `erase(v.begin() + i)`
+- **map:** `m[key] = value`, `find(key)`, `count(key)` / `contains(key)` (C++20), `erase(key)`
+- **set:** `insert(x)`, `count(x)` / `contains(x)`, `erase(x)`
+
+⚠️ `m[key]` **creates** an empty entry if the key is missing → use `find` / `contains` to look things up.
 ```cpp
--'MAP'
--'SET'
--'ALOGRITHMS'
--'LAMBDAS'
--'FILE I/O'
--'SMART POINTERS'
-(#10-map, set, algorithms, lambdas, file I/O, smart pointers)
+for (const auto& [id, book] : books) { ... }   // loop over a map (key, value)
+```
+
+### Iterators: positions in a container
+```cpp
+auto it = books.find(5);
+if (it != books.end()) {          // end() = one past the last = "not found"
+    Book& b = it->second;         // map: it->first = key, it->second = value
+}
+```
+Algorithms take a range `(begin, end)`, so they work with any container.
+
+### Algorithms (`<algorithm>`, `accumulate` in `<numeric>`)
+| Algorithm | Does |
+|---|---|
+| `std::sort(b, e, cmp)` | sort; `cmp(a, b)` returns true if `a` comes **before** `b` |
+| `std::find(b, e, value)` | first exact match (iterator, or `e` if none) |
+| `std::find_if(b, e, pred)` | first element where `pred` is true |
+| `std::count_if(b, e, pred)` | how many match |
+| `std::any_of` / `all_of` / `none_of` | any / all / none match? |
+| `std::min_element` / `max_element` | iterator to smallest / largest |
+| `std::reverse(b, e)` | reverse the order |
+| `std::accumulate(b, e, start)` | sum |
+| `std::transform(b, e, out, f)` | apply `f` to each element |
+| `std::erase_if(container, pred)` | remove all matching (C++20) |
+```cpp
+std::sort(v.begin(), v.end(), [](const Book& a, const Book& b) { return a.year < b.year; });
+auto n = std::count_if(v.begin(), v.end(), [](const Book& b) { return b.borrowed; });
+```
+A `map` is always sorted **by key** → to sort books by title, copy them into a `std::vector<Book>` first.
+
+### Lambdas with parameters
+`[capture](parameters) { body }`: `[](const Book& b) { return b.borrowed; }` = "for a book `b`, is it borrowed?".
+Same captures as in tests: `[&]` outside variables by reference, `[=]` copies, `[]` none.
+```cpp
+std::string text = "Harry";
+auto it = std::find_if(v.begin(), v.end(),
+    [&](const Book& b) { return b.title.find(text) != std::string::npos; });   // needs [&] for text
+```
+
+### Strings
+| | |
+|---|---|
+| `s.find("abc")` | position, or `std::string::npos` if not found |
+| `s.substr(pos, len)` | part of the string |
+| `std::to_string(42)` | number → string |
+| `std::stoi("42")`, `std::stod("1.5")` | string → number (throws on bad input) |
+
+### Files (`<fstream>`)
+```cpp
+std::ofstream out("library.txt");              // write
+out << b.id << "|" << b.title << "\n";
+
+std::ifstream in("library.txt");               // read
+std::string line;
+while (std::getline(in, line)) {
+    std::istringstream ss(line);
+    std::string field;
+    std::getline(ss, field, '|');              // read up to the next '|'
+}
+```
+Titles contain spaces → separate fields with `|` (or one field per line), not spaces.
+
+### Smart pointers (`<memory>`)
+```cpp
+std::unique_ptr<Shape> s = std::make_unique<Circle>(2);   // deleted automatically
+std::vector<std::unique_ptr<Shape>> shapes;               // no delete loop needed
+shapes.push_back(std::make_unique<Square>(5));
+```
+`unique_ptr` has exactly one owner and can't be copied (only moved). It replaces `new` / `delete`.
+
 ---
+
 ## 11. Exceptions
 ```cpp
 if (b == 0) throw std::invalid_argument("Division by zero");   // <stdexcept>
@@ -357,7 +440,7 @@ Real-world tools: **GoogleTest** (industry standard), Catch2 / doctest, **CTest*
 
 ---
 
-## 14. Building
+## 15. Building
 Compile (`.cpp` → `.obj`) then link (`.obj` → `.exe`). MSVC also makes `.pdb` (debug info, `/Zi`) and `.ilk`; all are safe to delete. g++ leaves only the `.exe`.
 
 | Error starts with | Who | Usual cause |
@@ -379,7 +462,7 @@ Ignore the *detected tasks* (VS Code defaults without my flags).
 
 ---
 
-## 15. Git and databases
+## 16. Git and databases
 **Git:** don't commit build output. `.gitignore`: `build` (matches at any level), `*.exe`, `*.obj`, `*.pdb`, `*.ilk`, `.env`. Comments on their own line. Already committed → `git rm -r --cached build`.
 
 **Databases:** SQL is the language; SQLite (embedded, one file, one app) vs. server databases (PostgreSQL, MS SQL Server, MySQL: many users over the network). C++ → PostgreSQL via `libpqxx`. Never put passwords in code.
@@ -387,7 +470,7 @@ Ignore the *detected tasks* (VS Code defaults without my flags).
 ---
 
 
-## 16. Bug log
+## 17. Bug log
 | # | Bug → fix | Lesson |
 |---|---|---|
 | 1 | Same random number every run → `srand(time(0))` | Random needs a seed |
