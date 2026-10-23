@@ -1,83 +1,6 @@
 #include <iostream>
-#include <map>
-#include <exception>
-#include <string>
-#include <sstream>
-#include <algorithm>
-struct Book {
-    int id;
-    std::string title;
-    std::string author;
-    int year;
-    bool borrowed;
-};
-
-class Library {
-    //key = id
-    private:
-        std::map<int, Book> books;
-    public:
-        void addBook(int id, const std::string& title, const std::string& author, int year) {
-            if (books.count(id)) throw std::invalid_argument("A book with this id already exists");
-            books[id] = Book{id, title, author, year, false};
-        } 
-        void removeBook(int id){
-            if(!books.count(id)) throw std::invalid_argument("Book did not found");
-            books[id] = Book{id};
-        }
-        void borrowBook(int id) {
-            auto it = books.find(id);                     // look up the book by id
-            if (it == books.end()) throw std::invalid_argument("Book not found");
-
-            Book& book = it->second;                      // & = the REAL book inside the map
-            if (book.borrowed) throw std::invalid_argument("Book is already borrowed");
-
-            book.borrowed = true;                         // change just this field
-        }
-        void returnBook(int id){
-            auto it = books.find(id);
-            if(it == books.end()) throw std::invalid_argument("Book not found");
-
-            Book& book = it->second;
-            if(!book.borrowed) throw std::invalid_argument("Book did not borrowed");
-
-            book.borrowed = false;
-        }
-        void allBooks(){
-            for (auto i = books.begin(); i != books.end(); i++) {
-                std::cout << i->first << " "
-                        << i->second.title << " "
-                        << i->second.author << " "
-                        << i->second.year << " "
-                        << (i->second.borrowed ? "Borrowed" : "Available")
-                        << '\n';
-            }
-        }
-        void searchBook(const std::string& text) {
-            bool found = false;
-            for (const auto& [id, book] : books) {                       // id = key, book = value
-                if (book.title.find(text) != std::string::npos) {
-                    std::cout << id << " " << book.title << " " << book.author << "\n";
-                    found = true;
-                }
-            }
-            if (!found) std::cout << "Book not found.\n";
-        }
-};
-
-bool ReadInt(int& out) {
-
-    std::string line;
-        if (!std::getline(std::cin, line)) return false;
-        std::istringstream ss(line);
-        char extra;
-        return (ss >> out) && !(ss >> extra);
-    }
-
-bool readLine(std::string& out) {
-    return static_cast<bool>(std::getline(std::cin, out));
-}
-
+#include <vector>
+#include "../inc/library.h"
 
 int main(){
     Library lib;
@@ -151,8 +74,14 @@ int main(){
                 std::cout<<"Successfully returned\n";
                 break;
             case 5:
-                std::cout<<"List of all books\n";
-                lib.allBooks();
+                std::cout<<"List books sorted by: 1. ID\n2. Title\n3. Author\n4. Year\n";
+                int five; 
+                if (!ReadInt(five)) {
+                if (std::cin.eof()) break;         
+                std::cout << "Please enter a number from 1 to 4.\n";
+                continue;
+                }
+                lib.allBooks(five);
                 break;
             case 6:
                 std::cout<<"Search a book\n";
