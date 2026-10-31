@@ -12,21 +12,22 @@ int main(){
         std::cout<<"3.Borrow\n";
         std::cout<<"4.Return\n";
         std::cout<<"5.List of all books\n";
-        std::cout<<"6.Search\n";
-        std::cout << "7. Exit\n";
+        std::cout<<"6.List of all authors\n";
+        std::cout<<"7.Search\n";
+        std::cout << "8. Exit\n";
         std::cout << "Enter your choice: ";
         if (!ReadInt(choice)) {
             if (std::cin.eof()) break;         
-            std::cout << "Please enter a number from 1 to 7.\n";
+            std::cout << "Please enter a number from 1 to 8.\n";
             continue;
         }
-        if (choice < 1 || choice > 7) {
-            std::cout << "Please enter a number from 1 to 7.\n";
+        if (choice < 1 || choice > 8) {
+            std::cout << "Please enter a number from 1 to 8.\n";
             continue;
         }
 
         try {
-            if(choice == 7){
+            if(choice == 8){
                 break;
             }
         }   catch (const std::invalid_argument& e){
@@ -74,16 +75,19 @@ int main(){
                 std::cout<<"Successfully returned\n";
                 break;
             case 5:
-                std::cout<<"List books sorted by: 1. ID\n2. Title\n3. Author\n4. Year\n";
+                std::cout<<"List books sorted by: 1. ID\n2. Title\n3. Author\n4. Year\n5. Total borrowed books";
                 int five; 
                 if (!ReadInt(five)) {
                 if (std::cin.eof()) break;         
-                std::cout << "Please enter a number from 1 to 4.\n";
+                std::cout << "Please enter a number from 1 to 5.\n";
                 continue;
                 }
                 lib.allBooks(five);
                 break;
             case 6:
+                lib.allAuthors();
+                break;
+            case 7:
                 std::cout<<"Search a book\n";
                 getline(std::cin,query);
                 lib.searchBook(query);

@@ -6,6 +6,7 @@
 #include <exception>
 #include <map>
 #include <vector>
+#include <set>
 
 struct Book {
     int id;
@@ -18,7 +19,7 @@ struct Book {
 class Library {
     //key = id
     private:
-        std::map<int, Book> books;
+        std::map<int, Book> books; 
     public:
         void addBook(int id, const std::string& title, const std::string& author, int year) {
             if (books.count(id)) throw std::invalid_argument("A book with this id already exists");
@@ -69,14 +70,26 @@ class Library {
                         return a.year < b.year;
                         }
                     );
-                } 
+                } else if (sortBy == 5){  
+                    int count = std::count_if(copy.begin(),copy.end(),
+                    [](const Book& book) {
+                        return book.borrowed == true;
+                     }
+                    );
+                    if (count != 0){
+                        std::cout << "Total borrowed books: " << count << '\n';
+                    } else if (count == 0){
+                        std::cout << "Every book is available. \n";
+                    }
+                    
+                }
              
             for (const Book& book : copy) {
                 std::cout << book.id << " "
                         << book.title << " "
                         << book.author << " "
                         << book.year << " "
-                        << (book.borrowed ? "Borrowed" : "Available")
+                        << (book.borrowed ? "Borrowed" : "Available") << " "
                         << '\n';
             }
         }
@@ -90,8 +103,19 @@ class Library {
             }
             if (!found) std::cout << "Book not found.\n";
         }
-};
+        void allAuthors(){
+            std::set<std::string> authors;
+            for (auto it = books.begin();it!=books.end(); it++){
+               authors.insert(it->second.author);
+            }
+            std::cout << "Total unique authors: " << authors.size() << '\n';
+            for (const auto& author : authors) {
+                std::cout << author << '\n';
+            }
 
+
+    };
+};
 inline bool ReadInt(int& out) {
 
     std::string line;
