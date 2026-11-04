@@ -37,6 +37,9 @@ int main() { count++; }   // ❌ 'count' is ambiguous (mine or std::count?)
 ```
 Never in a header (it spreads to every includer). OK in small practice files or inside one function. Good compromise: `using std::cout;`.
 
+array -> its size is constant --numbers[5] = {1,2,3,4,5};
+vector -> size is changable   --numbers(5) = {1,2,3,4,5} if dont add values automatically 0,0,0,0,0;
+list -> linked list           --
 ---
 
 ## 2. Types and their limits

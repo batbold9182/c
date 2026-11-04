@@ -1,9 +1,13 @@
 #include <iostream>
 #include <vector>
 #include "../inc/library.h"
+#include <fstream>
 
 int main(){
     Library lib;
+    std::fstream MyFile("library.txt");
+
+    
     while(true){
         int choice;
         std::cout<<"Welcome to the library\n";
@@ -102,6 +106,6 @@ int main(){
         
 }
     
-
+    MyFile.close();
     return 0;
 }
