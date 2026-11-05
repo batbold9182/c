@@ -5,7 +5,7 @@
 
 int main(){
     Library lib;
-    std::fstream MyFile("library.txt");
+    lib.loadFromFile("library.txt");
 
     
     while(true){
@@ -32,6 +32,7 @@ int main(){
 
         try {
             if(choice == 8){
+                lib.saveToFile("library.txt");
                 break;
             }
         }   catch (const std::invalid_argument& e){
@@ -105,7 +106,6 @@ int main(){
         }
         
 }
-    
-    MyFile.close();
+    lib.saveToFile("library.txt"); 
     return 0;
 }

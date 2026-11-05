@@ -3,10 +3,10 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
-#include <exception>
 #include <map>
 #include <vector>
 #include <set>
+#include <fstream>
 
 struct Book {
     int id;
@@ -71,7 +71,7 @@ class Library {
                         }
                     );
                 } else if (sortBy == 5){  
-                    int count = std::count_if(copy.begin(),copy.end(),
+                    auto count = std::count_if(copy.begin(),copy.end(),
                     [](const Book& book) {
                         return book.borrowed == true;
                      }
@@ -103,7 +103,7 @@ class Library {
             }
             if (!found) std::cout << "Book not found.\n";
         }
-        void allAuthors(){
+        void allAuthors() const {
             std::set<std::string> authors;
             for (auto it = books.begin();it!=books.end(); it++){
                authors.insert(it->second.author);
@@ -114,8 +114,43 @@ class Library {
             }
 
 
-    };
-};
+    }
+        void saveToFile(const std::string& filename) const {
+            std::ofstream file(filename);
+            if (!file.is_open()) {
+                std::cout << "File could not be opened\n";
+                return;
+            }
+            for (const auto& [id, book] : books) {
+                file << id << '|' << book.title << '|' << book.author << '|'
+                     << book.year << '|' << (book.borrowed ? 1 : 0) << '\n';
+            }
+        }
+        void loadFromFile(const std::string& filename) {
+            std::ifstream file(filename);
+            if (!file.is_open()) {
+                std::cout << "File could not be opened\n";
+                return;
+            }
+            books.clear();
+            std::string line;
+            while (std::getline(file, line)) {
+                std::istringstream ss(line);
+                std::string idText, title, author, yearText, borrowedText;
+                std::getline(ss, idText, '|');
+                std::getline(ss, title, '|');
+                std::getline(ss, author, '|');
+                std::getline(ss, yearText, '|');
+                std::getline(ss, borrowedText);              
+
+                int id = std::stoi(idText);
+                addBook(id, title, author, std::stoi(yearText));
+                if (borrowedText == "1") books[id].borrowed = true;  
+            }
+        }
+};      
+
+    
 inline bool ReadInt(int& out) {
 
     std::string line;

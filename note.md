@@ -352,6 +352,44 @@ while (std::getline(in, line)) {
 ```
 Titles contain spaces → separate fields with `|` (or one field per line), not spaces.
 
+### Save / load (Stage 4)
+Format: one book per line, `|` between fields, bool as `1`/`0`:
+```
+2|Dune|Herbert|1965|1
+```
+```cpp
+void saveToFile(const std::string& filename) const {
+    std::ofstream file(filename);                       // creates / overwrites
+    for (const auto& [id, b] : books)
+        file << id << '|' << b.title << '|' << b.author << '|' << b.year << '|' << (b.borrowed ? 1 : 0) << '\n';
+}
+void loadFromFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file) return;                                  // no file on the first run = normal
+    std::string line;
+    while (std::getline(file, line)) {
+        try {
+            std::istringstream ss(line);
+            std::string idText, title, author, yearText, borrowedText;
+            std::getline(ss, idText, '|');  std::getline(ss, title, '|');
+            std::getline(ss, author, '|');  std::getline(ss, yearText, '|');
+            std::getline(ss, borrowedText);             // last field: to the end of the line
+            int id = std::stoi(idText);
+            addBook(id, title, author, std::stoi(yearText));
+            if (borrowedText == "1") books[id].borrowed = true;   // addBook starts as available
+        } catch (const std::exception&) { /* skip a damaged line */ }
+    }
+}
+```
+- **Save and load are a pair**: exactly the same format. Change one → check the other.
+- `>>` stops at every space → "The Hobbit" breaks a space-separated file.
+- `std::ifstream` = read, `std::ofstream` = write (creates the file). `std::fstream` without flags only opens an **existing** file.
+- Save/load belong **in the class** (they need the private `books`); `main` decides **when** (load at start, save after the loop).
+- Pass the filename as a parameter → tests can use another file.
+- `std::stoi("")` / `stoi("abc")` **throws** → a damaged file crashes the program unless each line is parsed in `try`.
+- **Never save over a file you couldn't read** → a failed load + save on exit wipes the data.
+- Test the **round trip**: save, restart, list, restart again. Multi-word titles, borrowed status, a missing file, a damaged line.
+
 ### Smart pointers (`<memory>`)
 ```cpp
 std::unique_ptr<Shape> s = std::make_unique<Circle>(2);   // deleted automatically
@@ -539,6 +577,24 @@ Ignore the *detected tasks* (VS Code defaults without my flags).
 | 61 | Truck ignored tons → `rate + 15 * tons` | Compare with the rules |
 | 62 | Total broken (no `{ }`, reset inside, `+=` in `cout`) | Before / inside / after |
 | 63 | Test crashed on a mutant (plain `check`) → inside `checkNoThrow` | Wrap risky calls |
+| 64 | `if (choice = 7)` exited immediately → `==` | `=` assigns, `==` compares |
+| 65 | Menu choice never read → `ReadInt(choice)` | Prompt ≠ input |
+| 66 | Back to `cin >>` + `getline` in add-book → `ReadInt` / `readLine` only | Don't mix them |
+| 67 | `borrowBook` replaced the whole book → `find` + `Book&` + flip `borrowed` | Change one field via a reference |
+| 68 | `removeBook` left an empty book (`books[id] = Book{id}`) → `erase(id)` | `[]` creates, `erase` removes |
+| 69 | `case 3` fell into `default` → add `break` | Every case needs break |
+| 70 | `std::invalid_argument("...");` did nothing → `throw` | Creating ≠ throwing |
+| 71 | Search asked for the text twice → use the parameter | `main` reads, the class works |
+| 72 | Global `std::vector<Book> copy` in a header → local variable | Smallest scope; no globals in headers |
+| 73 | Sorted copy but printed the map → print the copy | Use the variable you changed |
+| 74 | `main` still called removed `sortbyX()` (C2039) → `allBooks(sortBy)` | Update callers after a refactor |
+| 75 | `else` for invalid sort also caught choice 1 → `else if (sortBy != 1)` | Check every value reaching a branch |
+| 76 | `count_if` into `int` (C4244) → `auto` | Keep builds warning-free |
+| 77 | `const void allAuthors()` (C2662) → `void allAuthors() const` | const after `()` (bug #57 again) |
+| 78 | Load read nothing: spaces + `>>` broke "The Hobbit" → `\|` + `getline` | Separators must not appear in data |
+| 79 | Failed load + save on exit **wiped library.txt** | Never save over a file you couldn't read |
+| 80 | Load fixed but save still wrote spaces → `stoi("")` crashed on start | Save and load are a pair |
+| 81 | One damaged line crashed the program → `try` per line | Files can't be trusted |
 
 
 
