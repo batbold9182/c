@@ -29,4 +29,21 @@ class inventory{
                 }
                 items.erase(items.begin()+index);
             }
-    };
+            template <typename Pred>
+            std::vector<T> filter(Pred p) const {
+                std::vector<T> result;
+                for (const T& item : items){
+                    if(p(item)){
+                        result.push_back(item);
+                    }
+                }
+                return result;
+            };
+
+            
+};
+
+struct Product{
+                std::string name;
+                double price;
+        };

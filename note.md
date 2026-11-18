@@ -450,6 +450,7 @@ checkNoThrow("1 day", [&]{ check("1 day costs 40", c.rentalCost(1), 40); });
 return report();                                             // summary + exit code (0 = all passed)
 ```
 **Lambdas** `[&]{ ... }` package code so `checkThrows` can run it inside its own `try`. `[&]` = real outside variables, `[=]` = read-only copies, `[]` = none.
+size_t = a non-negative whole number, used for sizes and positions.
 
 ### What to test
 Normal cases · negatives and zero · decimals · big numbers · every error must throw · things that must **not** throw · **boundaries** (6 vs. 7 days, 160 vs. 161 hours, 89.9 vs. 90) · **each condition separately** (only `a` wrong, only `b` wrong) · polymorphism through `const Base&` · **every bug I've fixed**.
